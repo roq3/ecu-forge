@@ -9,7 +9,7 @@ curl -X POST https://ecuforge.byst.re/api/v1/convert/kp-to-xdf \
   -F "file=@KP.kp"
 ```
 
-**Supported `.kp` files:** native WinOLS 5.0, builds ~5.84–5.91 (the build number is embedded in the file itself, e.g. `"5.91.0 Full"`). Files from third-party tools instead of WinOLS directly, or outside this build range, may not convert correctly — see [`API.md`](API.md#convert-a-kp-file-to-xdf) for details.
+**Supported `.kp` files:** native WinOLS 5.0, builds ~5.84–5.91 (the build number is embedded in the file itself, e.g. `"5.91.0 Full"`), both full ECU project files and hand-made map packs ("Kennfeldpaket" — send the matching `.bin` too). Files from third-party tools instead of WinOLS directly, or outside this build range, may not convert correctly — see [`API.md`](API.md#convert-a-kp-file-to-xdf) for details.
 
 - **Web converter (no code):** [ecuforge.byst.re/converter](https://ecuforge.byst.re/converter)
 - **Full API reference:** [`API.md`](API.md) — every endpoint, request/response shapes, error codes, limits, CORS, and examples in curl / JavaScript / PHP.

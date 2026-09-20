@@ -35,7 +35,7 @@ Content-Type: multipart/form-data
 
 Converts an uploaded [WinOLS](https://en.wikipedia.org/wiki/WinOLS) `.kp` calibration project file into a [TunerPro](http://www.tunerpro.net/) `.xdf` definition file.
 
-**Supported `.kp` files:** native WinOLS 5.0, builds ~5.84–5.91 — the build number is embedded in the file itself (e.g. `"5.91.0 Full"`). Files produced by a third-party tool instead of WinOLS directly, or from outside this build range, may use a different internal layout and won't convert correctly (you'll get a `conversion_failed` error, see [Errors](#errors)).
+**Supported `.kp` files:** native WinOLS 5.0, builds ~5.84–5.91 — the build number is embedded in the file itself (e.g. `"5.91.0 Full"`). Both full ECU project files and hand-made map packs ("Kennfeldpaket") are supported; for a map pack, send the matching `bin` too, because its addresses are verified against it. Files produced by a third-party tool instead of WinOLS directly, or from outside this build range, may use a different internal layout and won't convert correctly (you'll get a `conversion_failed` error, see [Errors](#errors)).
 
 ### Request fields
 
