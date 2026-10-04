@@ -7,7 +7,7 @@ Public, free API for converting engine ECU calibration files. No API keys, no ac
 - **OpenAPI spec:** [`https://ecuforge.byst.re/openapi.json`](https://ecuforge.byst.re/openapi.json) — the same definition backing the docs above, importable into Postman, Insomnia, or any other OpenAPI-aware client instead of hand-writing requests.
 - **Auth:** none. The API is intentionally public and anonymous.
 
-This document covers the currently available endpoint. More conversions may be added over time under the same `/api/v1/convert/...` structure — check `/api/docs` for the current, authoritative list if this file is out of date.
+This document covers the currently available endpoints. More tools may be added over time under the `/api/v1/...` structure — check `/api/docs` for the current, authoritative list if this file is out of date.
 
 ## Availability
 
@@ -20,6 +20,7 @@ There is no official client library yet — for now, call the HTTP API directly 
 ## Contents
 
 - [Convert a .kp file to .xdf](#convert-a-kp-file-to-xdf)
+- [Decrypt an encrypted .xdf file](#decrypt-an-encrypted-xdf-file)
 - [Downloading the result](#downloading-the-result)
 - [Errors](#errors)
 - [Limits](#limits)
@@ -68,6 +69,48 @@ Converts an uploaded [WinOLS](https://en.wikipedia.org/wiki/WinOLS) `.kp` calibr
 | `summary.verified_maps` | How many of those maps had their addresses confirmed against the `.bin` (or against internal structural checks, if no `.bin` was given). |
 | `summary.unverified_maps` | Titles of maps that could not be confirmed — worth double-checking manually in TunerPro before using the result on a live vehicle. |
 
+## Decrypt an encrypted .xdf file
+
+```
+POST /api/v1/decrypt/xdf
+Content-Type: multipart/form-data
+```
+
+Decrypts an encrypted [TunerPro](http://www.tunerpro.net/) `.xdf` definition file back into plain, readable XML. Some `.xdf` files are shipped RC4-encrypted; this endpoint strips the TunerPro header and decrypts the payload so you get the definition as ordinary XML you can open, diff, or edit.
+
+**Accepted files:** encrypted TunerPro `.xdf` files only — they begin with a fixed TunerPro header. A file without that header is rejected with a `not_encrypted` error (an already plain-text `.xdf` doesn't need decrypting). The decryption key is configured on the server, so there is **nothing extra to send** — just the file.
+
+### Request fields
+
+| Field | Required | Description |
+|---|---|---|
+| `file` | yes | The encrypted TunerPro `.xdf` file to decrypt. |
+
+### Success response — `200 OK`
+
+```json
+{
+  "status": "ok",
+  "download_url": "https://ecuforge.byst.re/dl/aZ3xQ9kLmPqRtVwXyB2cFhJn",
+  "expires_at": "2026-09-19T15:32:00Z",
+  "filename": "MyDefinition_decrypted.xdf",
+  "summary": {
+    "payload_bytes": 48112,
+    "output_bytes": 131072
+  }
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `download_url` | A one-time, single-use link to fetch the decrypted file — see [Downloading the result](#downloading-the-result). This is **not** a direct file URL and can't be reused. |
+| `expires_at` | When `download_url` stops working if it's never used. |
+| `filename` | Suggested download name — the original name with a `_decrypted.xdf` suffix. |
+| `summary.payload_bytes` | Size of the encrypted payload that was decrypted (the input file minus its header). |
+| `summary.output_bytes` | Size of the resulting plain-XML `.xdf`. |
+
+The decrypted file is returned through the same download mechanism as the converter — a plain-XML `.xdf` served as `application/xml`.
+
 ## Downloading the result
 
 ```
@@ -100,14 +143,16 @@ All error responses share this shape:
 }
 ```
 
-| HTTP status | `code` | When |
-|---|---|---|
-| `400` | `missing_file` | No `file` field was sent, or it was empty. |
-| `413` | `file_too_large` | `file` or `bin` exceeds the configured size limit (see [Limits](#limits)). |
-| `422` | `conversion_failed` | The file isn't a recognizable `.kp`, or the converter couldn't process it (e.g. unsupported WinOLS version). |
-| `500` | `internal_error` | Unexpected server error. |
+| HTTP status | `code` | Endpoint | When |
+|---|---|---|---|
+| `400` | `missing_file` | both | No `file` field was sent, or it was empty. |
+| `413` | `file_too_large` | both | `file` (or `bin`) exceeds the configured size limit (see [Limits](#limits)). |
+| `422` | `conversion_failed` | `/convert/kp-to-xdf` | The file isn't a recognizable `.kp`, or the converter couldn't process it (e.g. unsupported WinOLS version). |
+| `422` | `not_encrypted` | `/decrypt/xdf` | The file isn't an encrypted TunerPro `.xdf` (missing the expected header) — it may already be plain text or in a different format. |
+| `422` | `decryption_failed` | `/decrypt/xdf` | The file couldn't be decrypted to valid XDF — e.g. it uses a different key, or isn't a TunerPro-encrypted `.xdf`. |
+| `500` | `internal_error` | both | Unexpected server error. |
 
-`GET /dl/{token}` returns `404 Not Found` with `{"detail": "Not Found"}` when the token doesn't exist, was already used, or has expired — intentionally without distinguishing which, since that distinction isn't useful to a caller and reveals nothing to someone guessing tokens. Note this error shape (`{"detail": ...}`) is different from the `{"status", "code", "message"}` shape used by `/api/v1/convert/kp-to-xdf` above — `/dl/{token}` isn't under `/api/v1` and doesn't follow the same error contract.
+`GET /dl/{token}` returns `404 Not Found` with `{"detail": "Not Found"}` when the token doesn't exist, was already used, or has expired — intentionally without distinguishing which, since that distinction isn't useful to a caller and reveals nothing to someone guessing tokens. Note this error shape (`{"detail": ...}`) is different from the `{"status", "code", "message"}` shape used by the `/api/v1/...` endpoints above — `/dl/{token}` isn't under `/api/v1` and doesn't follow the same error contract.
 
 ## Limits
 
@@ -115,8 +160,9 @@ All error responses share this shape:
 |---|---|
 | Max `.kp` size | 1 MB |
 | Max `.bin` size | 4 MB |
+| Max `.xdf` size (decrypt) | 4 MB |
 
-Real-world `.kp` files are typically tens of KB up to a few hundred KB; firmware images (`.bin`) are usually a few hundred KB up to a couple of MB. These limits may change — `/api/docs` always reflects the current configuration.
+Real-world `.kp` files are typically tens of KB up to a few hundred KB; firmware images (`.bin`) are usually a few hundred KB up to a couple of MB; encrypted `.xdf` definitions are usually well under 1 MB. These limits may change — `/api/docs` always reflects the current configuration.
 
 There is currently no rate limiting; please be a reasonable citizen (don't hammer the endpoint in a tight loop) so the API stays free and open for everyone.
 
@@ -148,7 +194,16 @@ curl -X POST https://ecuforge.byst.re/api/v1/convert/kp-to-xdf \
   -F "bin=@EXTFLASH.bin"
 ```
 
+### curl — decrypt an encrypted `.xdf`
+
+```bash
+curl -X POST https://ecuforge.byst.re/api/v1/decrypt/xdf \
+  -F "file=@Encrypted.xdf"
+```
+
 ### curl — download the result
+
+Works the same for both tools — the `download_url` from either response points here:
 
 ```bash
 curl -o KP.xdf "https://ecuforge.byst.re/dl/aZ3xQ9kLmPqRtVwXyB2cFhJn"
@@ -171,6 +226,25 @@ async function convertKpToXdf(kpFile, binFile) {
     throw new Error(`${data.code}: ${data.message}`);
   }
   return data; // data.download_url, data.summary, ...
+}
+```
+
+### JavaScript (browser) — decrypt an encrypted `.xdf`
+
+```javascript
+async function decryptXdf(xdfFile) {
+  const form = new FormData();
+  form.append("file", xdfFile);
+
+  const res = await fetch("https://ecuforge.byst.re/api/v1/decrypt/xdf", {
+    method: "POST",
+    body: form,
+  });
+  const data = await res.json();
+  if (data.status !== "ok") {
+    throw new Error(`${data.code}: ${data.message}`);
+  }
+  return data; // data.download_url, data.filename, ...
 }
 ```
 
